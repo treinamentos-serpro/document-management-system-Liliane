@@ -23,9 +23,9 @@ function createDocumentController(service) {
       }
     },
 
-    list: (request, response, next) => {
+    list: async (request, response, next) => {
       try {
-        response.json({ documents: service.list(getOwner(request)) });
+        response.json({ documents: await service.list(getOwner(request)) });
       } catch (error) {
         next(error);
       }
