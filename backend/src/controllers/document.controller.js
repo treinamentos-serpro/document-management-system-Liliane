@@ -16,9 +16,6 @@ function createDocumentController(service) {
         const owner = getOwner(request);
         response.status(201).json(await service.upload(request.file, owner));
       } catch (error) {
-        if (request.file?.path) {
-          await service.removeUploadedFile(request.file);
-        }
         next(error);
       }
     },
