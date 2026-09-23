@@ -103,7 +103,6 @@ class DocumentService {
       await this.repository.removeFile(file.path);
     }
   }
-
 }
 
 module.exports = DocumentService;

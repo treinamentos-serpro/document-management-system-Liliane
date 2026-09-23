@@ -10,15 +10,28 @@ let server;
 let baseUrl;
 let storageDirectory;
 
+async function startTestServer(storageDirectory, maxFileSize = 1024) {
+  const testApp = app.createApp({ storageDirectory, maxFileSize });
+  const testServer = http.createServer(testApp);
+  await new Promise((resolve) => testServer.listen(0, resolve));
+
+  return {
+    server: testServer,
+    baseUrl: `http://localhost:${testServer.address().port}`,
+  };
+}
+
+async function stopTestServer(testServer) {
+  await new Promise((resolve) => testServer.close(resolve));
+}
+
 before(async () => {
   storageDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'dms-test-'));
-  server = http.createServer(app.createApp({ storageDirectory, maxFileSize: 1024 }));
-  await new Promise((resolve) => server.listen(0, resolve));
-  baseUrl = `http://localhost:${server.address().port}`;
+  ({ server, baseUrl } = await startTestServer(storageDirectory));
 });
 
 after(async () => {
-  await new Promise((resolve) => server.close(resolve));
+  await stopTestServer(server);
   await fs.rm(storageDirectory, { recursive: true, force: true });
 });
 
@@ -56,6 +69,7 @@ test('faz upload, lista e baixa um documento', async () => {
   });
   assert.equal(downloadResponse.status, 200);
   assert.equal(await downloadResponse.text(), 'conteúdo de teste');
+  assert.match(downloadResponse.headers.get('content-disposition'), /nota\.txt/);
 });
 
 test('isola documentos entre usuários', async () => {
@@ -83,15 +97,12 @@ test('rejeita upload sem arquivo e remove arquivo acima do limite', async () => 
   assert.deepEqual(await fs.readdir(storageDirectory), filesBeforeLargeUpload);
 });
 
-test('remove arquivos sem metadados ao iniciar uma nova instância', async () => {
+test('mantém arquivos no disco mesmo quando os metadados reiniciam', async () => {
   const orphanStorageDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'dms-orphan-test-'));
-  const firstApp = app.createApp({ storageDirectory: orphanStorageDirectory, maxFileSize: 1024 });
-  const firstServer = http.createServer(firstApp);
-  await new Promise((resolve) => firstServer.listen(0, resolve));
-  const firstUrl = `http://localhost:${firstServer.address().port}`;
+  const firstInstance = await startTestServer(orphanStorageDirectory);
   const form = new FormData();
   form.append('file', new File(['órfão'], 'orphan.txt', { type: 'text/plain' }));
-  const uploadResponse = await fetch(`${firstUrl}/upload`, {
+  const uploadResponse = await fetch(`${firstInstance.baseUrl}/upload`, {
     method: 'POST',
     headers: userHeaders('user-a'),
     body: form,
@@ -99,17 +110,14 @@ test('remove arquivos sem metadados ao iniciar uma nova instância', async () =>
   const firstDocument = await uploadResponse.json();
   assert.ok(firstDocument.id);
   assert.equal((await fs.readdir(orphanStorageDirectory)).length, 1);
-  await new Promise((resolve) => firstServer.close(resolve));
+  await stopTestServer(firstInstance.server);
 
-  const secondApp = app.createApp({ storageDirectory: orphanStorageDirectory, maxFileSize: 1024 });
-  const secondServer = http.createServer(secondApp);
-  await new Promise((resolve) => secondServer.listen(0, resolve));
-  const secondUrl = `http://localhost:${secondServer.address().port}`;
+  const secondInstance = await startTestServer(orphanStorageDirectory);
 
-  const listResponse = await fetch(`${secondUrl}/documents`, { headers: userHeaders('user-a') });
+  const listResponse = await fetch(`${secondInstance.baseUrl}/documents`, { headers: userHeaders('user-a') });
   assert.deepEqual((await listResponse.json()).documents, []);
-  assert.deepEqual(await fs.readdir(orphanStorageDirectory), []);
+  assert.equal((await fs.readdir(orphanStorageDirectory)).length, 1);
 
-  await new Promise((resolve) => secondServer.close(resolve));
+  await stopTestServer(secondInstance.server);
   await fs.rm(orphanStorageDirectory, { recursive: true, force: true });
 });

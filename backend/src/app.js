@@ -6,8 +6,8 @@ const DocumentService = require('./services/document.service');
 
 function createApp({ storageDirectory, maxFileSize } = {}) {
   const app = express();
-  const configuredStorageDirectory = storageDirectory || process.env.STORAGE_DIR || path.resolve(__dirname, '../../storage');
-  const configuredMaxFileSize = maxFileSize || Number(process.env.MAX_FILE_SIZE_BYTES || 10 * 1024 * 1024);
+  const configuredStorageDirectory = storageDirectory ?? process.env.STORAGE_DIR ?? path.resolve(__dirname, '../../storage');
+  const configuredMaxFileSize = maxFileSize ?? Number(process.env.MAX_FILE_SIZE_BYTES ?? 10 * 1024 * 1024);
   const repository = new DocumentRepository(configuredStorageDirectory);
   const service = new DocumentService(repository, { maxFileSize: configuredMaxFileSize });
 
@@ -17,7 +17,10 @@ function createApp({ storageDirectory, maxFileSize } = {}) {
     res.json({ status: 'ok' });
   });
 
-  app.use(documentRoutes(service, { storageDirectory: configuredStorageDirectory, maxFileSize: configuredMaxFileSize }));
+  app.use(documentRoutes(service, {
+    storageDirectory: configuredStorageDirectory,
+    maxFileSize: configuredMaxFileSize,
+  }));
 
   app.use((error, req, res, next) => {
     if (res.headersSent) {
