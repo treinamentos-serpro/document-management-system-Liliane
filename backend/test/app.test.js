@@ -84,7 +84,7 @@ test('rejeita upload sem arquivo e remove arquivo acima do limite', async () => 
   assert.deepEqual(await fs.readdir(storageDirectory), filesBeforeLargeUpload);
 });
 
-test('remove arquivos sem metadados ao iniciar uma nova instância', async () => {
+test('mantém arquivos no disco mesmo quando os metadados reiniciam', async () => {
   const orphanStorageDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'dms-orphan-test-'));
   const firstApp = app.createApp({ storageDirectory: orphanStorageDirectory, maxFileSize: 1024 });
   const firstServer = http.createServer(firstApp);
@@ -109,7 +109,7 @@ test('remove arquivos sem metadados ao iniciar uma nova instância', async () =>
 
   const listResponse = await fetch(`${secondUrl}/documents`, { headers: userHeaders('user-a') });
   assert.deepEqual((await listResponse.json()).documents, []);
-  assert.deepEqual(await fs.readdir(orphanStorageDirectory), []);
+  assert.equal((await fs.readdir(orphanStorageDirectory)).length, 1);
 
   await new Promise((resolve) => secondServer.close(resolve));
   await fs.rm(orphanStorageDirectory, { recursive: true, force: true });
