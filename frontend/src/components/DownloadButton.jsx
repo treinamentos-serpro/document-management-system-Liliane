@@ -29,10 +29,17 @@ export default function DownloadButton({ document, owner }) {
 
   return (
     <span className="download-action">
-      <button type="button" onClick={handleDownload} disabled={isDownloading}>
+      <button
+        type="button"
+        onClick={handleDownload}
+        disabled={isDownloading}
+        aria-busy={isDownloading}
+        aria-label={`${isDownloading ? 'Baixando' : 'Baixar'} ${document.originalName}`}
+        aria-describedby={error ? `download-error-${document.id}` : undefined}
+      >
         {isDownloading ? 'Baixando...' : 'Baixar'}
       </button>
-      {error && <small role="alert">{error}</small>}
+      {error && <small id={`download-error-${document.id}`} role="alert">{error}</small>}
     </span>
   );
 }

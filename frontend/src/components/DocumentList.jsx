@@ -24,8 +24,8 @@ export default function DocumentList({ documents, owner }) {
         <article className="document-row" key={document.id}>
           <div className="document-icon" aria-hidden="true">DOC</div>
           <div className="document-details">
-            <strong title={document.originalName}>{document.originalName}</strong>
-            <span>{formatSize(document.size)} · {formatDate(document.uploadedAt)}</span>
+            <h3 title={document.originalName}>{document.originalName}</h3>
+            <span>{formatSize(document.size)} <span aria-hidden="true">·</span> <time dateTime={document.uploadedAt}>{formatDate(document.uploadedAt)}</time></span>
           </div>
           <DownloadButton document={document} owner={owner} />
         </article>

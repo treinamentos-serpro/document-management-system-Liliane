@@ -61,18 +61,22 @@ export default function App() {
       </header>
 
       <section className="workspace" aria-label="Gestão de documentos">
-        <label className="owner-field">
+        <label className="owner-field" htmlFor="owner-id">
           Identificador do usuário
           <input
+            id="owner-id"
             value={owner}
             onChange={(event) => setOwner(event.target.value)}
             placeholder="Ex.: maria-123"
+            autoComplete="username"
           />
         </label>
 
         <UploadComponent disabled={!owner.trim()} onUpload={handleUpload} />
 
-        {message && <p className="feedback success" role="status">{message}</p>}
+        <div aria-live="polite" aria-atomic="true">
+          {message && <p className="feedback success" role="status">{message}</p>}
+        </div>
         {error && <p className="feedback error" role="alert">{error}</p>}
 
         <section className="documents-section" aria-labelledby="documents-title">
@@ -81,11 +85,11 @@ export default function App() {
               <p className="eyebrow">ARQUIVOS DISPONÍVEIS</p>
               <h2 id="documents-title">Documentos</h2>
             </div>
-            <span className="document-count">{documents.length}</span>
+            <span className="document-count" aria-label={`${documents.length} documentos`}>{documents.length}</span>
           </div>
 
           {isLoading ? (
-            <p className="empty-state">Carregando documentos...</p>
+            <p className="empty-state" role="status" aria-live="polite">Carregando documentos...</p>
           ) : (
             <DocumentList documents={documents} owner={owner} />
           )}
