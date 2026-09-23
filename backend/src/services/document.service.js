@@ -1,13 +1,40 @@
 const crypto = require('node:crypto');
 
-function serviceError(code, message, status) {
+function createServiceError(code, message, status) {
   const error = new Error(message);
   error.code = code;
   error.status = status;
   return error;
 }
 
-function publicDocument({ id, originalName, size, mimeType, uploadedAt, owner }) {
+function validateUpload(file, owner, maxFileSize) {
+  if (!owner) {
+    throw createServiceError('USER_REQUIRED', 'O cabeçalho X-User-Id é obrigatório.', 400);
+  }
+
+  if (!file) {
+    throw createServiceError('FILE_REQUIRED', 'É necessário enviar um arquivo.', 400);
+  }
+
+  if (file.size > maxFileSize) {
+    throw createServiceError('FILE_TOO_LARGE', 'O arquivo excede o tamanho máximo permitido.', 413);
+  }
+}
+
+function createDocumentMetadata(file, owner) {
+  return {
+    id: crypto.randomUUID(),
+    originalName: file.originalname,
+    storedName: file.filename,
+    storagePath: file.path,
+    size: file.size,
+    mimeType: file.mimetype,
+    uploadedAt: new Date().toISOString(),
+    owner,
+  };
+}
+
+function toPublicDocument({ id, originalName, size, mimeType, uploadedAt, owner }) {
   return { id, originalName, size, mimeType, uploadedAt, owner };
 }
 
@@ -18,52 +45,63 @@ class DocumentService {
   }
 
   async upload(file, owner) {
-    if (!owner) throw serviceError('USER_REQUIRED', 'O cabeçalho X-User-Id é obrigatório.', 400);
-    if (!file) throw serviceError('FILE_REQUIRED', 'É necessário enviar um arquivo.', 400);
-    if (file.size > this.maxFileSize) {
-      await this.removeUploadedFile(file);
-      throw serviceError('FILE_TOO_LARGE', 'O arquivo excede o tamanho máximo permitido.', 413);
-    }
-
-    const document = {
-      id: crypto.randomUUID(),
-      originalName: file.originalname,
-      storedName: file.filename,
-      storagePath: file.path,
-      size: file.size,
-      mimeType: file.mimetype,
-      uploadedAt: new Date().toISOString(),
-      owner,
-    };
-
     try {
-      this.repository.save(document);
-      return publicDocument(document);
+      validateUpload(file, owner, this.maxFileSize);
     } catch (error) {
       await this.removeUploadedFile(file);
       throw error;
     }
+
+    const document = createDocumentMetadata(file, owner);
+
+    try {
+      await this.repository.save(document);
+    } catch (error) {
+      await this.removeUploadedFile(file);
+      throw error;
+    }
+
+    return toPublicDocument(document);
   }
 
-  list(owner) {
-    return this.repository.findByOwner(owner).map(publicDocument);
+  async list(owner) {
+    const documents = await this.repository.findByOwner(owner);
+    return documents.map(toPublicDocument);
   }
 
   async download(id, owner) {
-    const document = this.repository.findById(id);
-    if (!document) throw serviceError('DOCUMENT_NOT_FOUND', 'Documento não encontrado.', 404);
-    if (document.owner !== owner) throw serviceError('DOCUMENT_FORBIDDEN', 'Você não tem acesso a este documento.', 403);
+    const document = await this.findOwnedDocument(id, owner);
 
     try {
-      return { document: publicDocument(document), content: await this.repository.readFile(document.storagePath) };
+      return {
+        document: toPublicDocument(document),
+        content: await this.repository.readFile(document.storagePath),
+      };
     } catch (error) {
-      if (error.code === 'ENOENT') throw serviceError('FILE_NOT_FOUND', 'Arquivo do documento não encontrado.', 404);
+      if (error.code === 'ENOENT') {
+        throw createServiceError('FILE_NOT_FOUND', 'Arquivo do documento não encontrado.', 404);
+      }
       throw error;
     }
   }
 
+  async findOwnedDocument(id, owner) {
+    const document = await this.repository.findById(id);
+    if (!document) {
+      throw createServiceError('DOCUMENT_NOT_FOUND', 'Documento não encontrado.', 404);
+    }
+
+    if (document.owner !== owner) {
+      throw createServiceError('DOCUMENT_FORBIDDEN', 'Você não tem acesso a este documento.', 403);
+    }
+
+    return document;
+  }
+
   async removeUploadedFile(file) {
-    if (file?.path) await this.repository.removeFile(file.path);
+    if (file?.path) {
+      await this.repository.removeFile(file.path);
+    }
   }
 }
 

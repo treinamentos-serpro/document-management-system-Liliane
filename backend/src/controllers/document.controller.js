@@ -13,19 +13,24 @@ function createDocumentController(service) {
   return {
     upload: async (request, response, next) => {
       try {
-        response.status(201).json(await service.upload(request.file, getOwner(request)));
+        const owner = getOwner(request);
+        response.status(201).json(await service.upload(request.file, owner));
       } catch (error) {
-        if (request.file?.path) await service.removeUploadedFile(request.file);
+        if (request.file?.path) {
+          await service.removeUploadedFile(request.file);
+        }
         next(error);
       }
     },
-    list: (request, response, next) => {
+
+    list: async (request, response, next) => {
       try {
-        response.json({ documents: service.list(getOwner(request)) });
+        response.json({ documents: await service.list(getOwner(request)) });
       } catch (error) {
         next(error);
       }
     },
+
     download: async (request, response, next) => {
       try {
         const result = await service.download(request.params.id, getOwner(request));

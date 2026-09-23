@@ -8,10 +8,13 @@ const { createDocumentController } = require('../controllers/document.controller
 function createDocumentRoutes(service, { storageDirectory, maxFileSize }) {
   const router = express.Router();
   fs.mkdirSync(storageDirectory, { recursive: true });
+
   const upload = multer({
     storage: multer.diskStorage({
       destination: storageDirectory,
-      filename: (request, file, callback) => callback(null, `${crypto.randomUUID()}${path.extname(file.originalname)}`),
+      filename: (request, file, callback) => {
+        callback(null, `${crypto.randomUUID()}${path.extname(file.originalname)}`);
+      },
     }),
     limits: { fileSize: maxFileSize },
   });
@@ -20,6 +23,7 @@ function createDocumentRoutes(service, { storageDirectory, maxFileSize }) {
   router.post('/upload', upload.single('file'), controller.upload);
   router.get('/documents', controller.list);
   router.get('/documents/:id/download', controller.download);
+
   return router;
 }
 
