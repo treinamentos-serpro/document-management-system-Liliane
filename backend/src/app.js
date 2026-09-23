@@ -1,27 +1,31 @@
-// Seed do servidor backend do Document Management System.
-//
-// Este arquivo é apenas um ponto de partida mínimo. Ao longo do workshop você
-// vai usar o Agent Mode do GitHub Copilot para construir as camadas:
-//   - routes/       (definição das rotas)
-//   - controllers/  (entrada HTTP e validação)
-//   - services/     (regras de negócio)
-//   - repositories/ (persistência: arquivos locais + metadados em memória)
-//
-// Restrição do projeto: uploads são gravados no filesystem local da aplicação
-// usando multer com diskStorage. Não utilize provedores externos.
-
 const express = require('express');
+const path = require('node:path');
+const documentRoutes = require('./routes/document.routes');
+const DocumentRepository = require('./repositories/document.repository');
+const DocumentService = require('./services/document.service');
 
-const app = express();
+function createApp({ storageDirectory, maxFileSize } = {}) {
+  const app = express();
+  const configuredStorage = storageDirectory || process.env.STORAGE_DIR || path.resolve(__dirname, '../../storage');
+  const configuredLimit = maxFileSize || Number(process.env.MAX_FILE_SIZE_BYTES || 10 * 1024 * 1024);
+  const repository = new DocumentRepository(configuredStorage);
+  const service = new DocumentService(repository, { maxFileSize: configuredLimit });
+
+  app.use(express.json());
+
+  app.get('/health', (req, res) => res.json({ status: 'ok' }));
+  app.use(documentRoutes(service, { storageDirectory: configuredStorage, maxFileSize: configuredLimit }));
+  app.use((error, req, res, next) => {
+    if (res.headersSent) return next(error);
+    const status = error.code === 'LIMIT_FILE_SIZE' ? 413 : error.status || 500;
+    const code = error.code === 'LIMIT_FILE_SIZE' ? 'FILE_TOO_LARGE' : error.code || 'INTERNAL_ERROR';
+    res.status(status).json({ error: { code, message: error.message || 'Ocorreu um erro interno.' } });
+  });
+  return app;
+}
+
+const app = createApp();
 const PORT = process.env.PORT || 3000;
-
-app.use(express.json());
-
-// Endpoint de verificação de saúde. As demais rotas (/upload, /documents,
-// /documents/:id/download) serão implementadas durante o Passo 2.
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
-});
 
 if (require.main === module) {
   app.listen(PORT, () => {
@@ -30,3 +34,4 @@ if (require.main === module) {
 }
 
 module.exports = app;
+module.exports.createApp = createApp;
